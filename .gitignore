@@ -1,0 +1,7 @@
+myenv/
+myenv/bin/activate.csh
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class

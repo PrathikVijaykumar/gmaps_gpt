@@ -37,6 +37,95 @@ def extract_pdf_filename(py_code):
         return match.group(1)
     return "generated_report.pdf"  # Default filename if not found
 
+# def execute_pdf_code(py_code):
+#     try:
+#         namespace = {}
+#         buffer = BytesIO()
+        
+#         # Import all possibly needed libraries in namespace
+#         exec("""
+# from reportlab.lib.pagesizes import letter, A4
+# from reportlab.pdfgen import canvas
+# from reportlab.lib import colors
+# from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+# from reportlab.lib.units import inch
+# from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+# from io import BytesIO
+# """, namespace)
+        
+#         # Add buffer to namespace
+#         namespace['buffer'] = buffer
+        
+#         # Handle different types of PDF generation code
+#         if 'SimpleDocTemplate' in py_code:
+#             # For SimpleDocTemplate pattern, replace the document creation
+#             modified_code = py_code.replace(
+#                 'SimpleDocTemplate(pdf_file,',
+#                 'SimpleDocTemplate(buffer,'
+#             ).replace(
+#                 'SimpleDocTemplate("buildings_sales_report.pdf",',
+#                 'SimpleDocTemplate(buffer,'
+#             )
+            
+#         elif 'canvas.Canvas' in py_code:
+#             # For canvas.Canvas pattern, modify the function
+#             if 'def' in py_code:
+#                 # If there's a function definition, modify its content
+#                 modified_code = re.sub(
+#                     r'canvas\.Canvas\(["\'].*?\.pdf["\']',
+#                     'canvas.Canvas(buffer',
+#                     py_code
+#                 )
+#             else:
+#                 # If it's direct code, wrap it in a function
+#                 modified_code = """
+# def generate_pdf(buffer):
+#     c = canvas.Canvas(buffer, pagesize=letter)
+#     """ + re.sub(
+#                     r'c\s*=\s*canvas\.Canvas\(["\'].*?\.pdf["\']',
+#                     'c = canvas.Canvas(buffer',
+#                     py_code.split('canvas.Canvas')[1]
+#                 )
+#                 modified_code += "\ngenerate_pdf(buffer)"
+        
+#         # Remove any direct file assignments
+#         modified_code = re.sub(
+#             r'pdf_file\s*=\s*["\'].*?\.pdf["\']',
+#             'pdf_file = ""  # Using buffer',
+#             modified_code
+#         )
+        
+#         print("=== Modified Code ===")
+#         print(modified_code)
+#         print("====================")
+        
+#         # Execute the modified code
+#         exec(modified_code, namespace)
+        
+#         # Check buffer content
+#         buffer.seek(0)
+#         content = buffer.getvalue()
+#         size = len(content)
+#         print(f"PDF Buffer size: {size} bytes")
+        
+#         if size == 0:
+#             print("Warning: PDF buffer is empty!")
+#             return None, None
+            
+#         buffer.seek(0)
+        
+#         # Extract original filename or use default
+#         filename_match = re.search(r'["\'](.+?\.pdf)["\']', py_code)
+#         filename = filename_match.group(1) if filename_match else "report.pdf"
+        
+#         return buffer, filename
+        
+#     except Exception as e:
+#         print(f"Error generating PDF: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         return None, None
+
 def execute_pdf_code(py_code):
     try:
         namespace = {}
@@ -58,26 +147,40 @@ from io import BytesIO
         
         # Handle different types of PDF generation code
         if 'SimpleDocTemplate' in py_code:
-            # For SimpleDocTemplate pattern, replace the document creation
-            modified_code = py_code.replace(
-                'SimpleDocTemplate(pdf_file,',
-                'SimpleDocTemplate(buffer,'
-            ).replace(
-                'SimpleDocTemplate("buildings_sales_report.pdf",',
-                'SimpleDocTemplate(buffer,'
+            # First, handle any variable assignments for PDF filename
+            modified_code = re.sub(
+                r'(?:pdf_file|pdf_filename)\s*=\s*["\'].*?\.pdf["\']',
+                'pdf_file = ""  # Using buffer',
+                py_code
+            )
+            
+            # Then handle SimpleDocTemplate creation with any filename pattern
+            modified_code = re.sub(
+                r'SimpleDocTemplate\(["\'].*?\.pdf["\']',
+                'SimpleDocTemplate(buffer',
+                modified_code
+            )
+            # Also handle variable-based filename
+            modified_code = re.sub(
+                r'SimpleDocTemplate\((pdf_file|pdf_filename)',
+                'SimpleDocTemplate(buffer',
+                modified_code
             )
             
         elif 'canvas.Canvas' in py_code:
-            # For canvas.Canvas pattern, modify the function
             if 'def' in py_code:
-                # If there's a function definition, modify its content
+                # For function-based canvas code
                 modified_code = re.sub(
                     r'canvas\.Canvas\(["\'].*?\.pdf["\']',
                     'canvas.Canvas(buffer',
                     py_code
                 )
+                # Remove any existing function call at the end
+                modified_code = re.sub(r'generate_pdf\(\)\s*$', '', modified_code)
+                # Add our function call with buffer
+                modified_code += "\ngenerate_pdf()"
             else:
-                # If it's direct code, wrap it in a function
+                # For direct canvas code
                 modified_code = """
 def generate_pdf(buffer):
     c = canvas.Canvas(buffer, pagesize=letter)
@@ -87,13 +190,6 @@ def generate_pdf(buffer):
                     py_code.split('canvas.Canvas')[1]
                 )
                 modified_code += "\ngenerate_pdf(buffer)"
-        
-        # Remove any direct file assignments
-        modified_code = re.sub(
-            r'pdf_file\s*=\s*["\'].*?\.pdf["\']',
-            'pdf_file = ""  # Using buffer',
-            modified_code
-        )
         
         print("=== Modified Code ===")
         print(modified_code)
@@ -125,7 +221,6 @@ def generate_pdf(buffer):
         import traceback
         traceback.print_exc()
         return None, None
-
 #----------------- CHANGING THE PYTHON CODE ON FLY----------------
 
 
